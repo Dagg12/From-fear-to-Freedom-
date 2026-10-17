@@ -1,0 +1,1 @@
+import {AccountDashboard} from '@/components/store-ui';export default function Account(){return <AccountDashboard/>}

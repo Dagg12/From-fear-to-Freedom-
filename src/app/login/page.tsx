@@ -1,0 +1,1 @@
+import {AuthPanel} from '@/components/store-ui';export default function Login(){return <AuthPanel/>}

@@ -1,0 +1,1 @@
+import {CheckoutPage} from '@/components/store-ui';export default function Checkout(){return <CheckoutPage/>}

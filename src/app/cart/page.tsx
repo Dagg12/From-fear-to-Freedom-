@@ -1,0 +1,1 @@
+import {CartPage} from '@/components/store-ui';export default function Cart(){return <CartPage/>}

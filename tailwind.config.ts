@@ -1,0 +1,1 @@
+import type { Config } from 'tailwindcss';const config:Config={content:['./src/**/*.{js,ts,jsx,tsx,mdx}'],theme:{extend:{colors:{burgundy:'#581d2b','burgundy-dark':'#32131d',cream:'#fbf7f0',gold:'#b99a62'},fontFamily:{display:['Cormorant Garamond','Georgia','serif'],sans:['DM Sans','Arial','sans-serif']}}},plugins:[]};export default config;

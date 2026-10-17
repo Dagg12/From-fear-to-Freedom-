@@ -1,0 +1,1 @@
+import {AdminDashboard} from '@/components/store-ui';export default function Admin(){return <AdminDashboard/>}
