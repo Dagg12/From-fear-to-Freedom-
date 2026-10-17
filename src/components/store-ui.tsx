@@ -17,6 +17,12 @@ export function AuthPanel(){
   const [password,setPassword]=useState('');
   const [message,setMessage]=useState('');
 
+  useEffect(()=>{
+    if(new URLSearchParams(window.location.search).has('email_confirmed')){
+      setMessage('Your email is confirmed. You can now sign in.');
+    }
+  },[]);
+
   async function submit(e:React.FormEvent<HTMLFormElement>){
     e.preventDefault();
     if(!hasSupabaseConfig()){
@@ -27,7 +33,7 @@ export function AuthPanel(){
       const {createClient}=await import('@/lib');
       const supabase=createClient();
       let result;
-      if(mode==='register')result=await supabase.auth.signUp({email,password,options:{data:{full_name:name}}});
+      if(mode==='register')result=await supabase.auth.signUp({email,password,options:{data:{full_name:name},emailRedirectTo:`${window.location.origin}/login?email_confirmed=1`}});
       else if(mode==='reset')result=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'/account'});
       else result=await supabase.auth.signInWithPassword({email,password});
       if(result.error)throw result.error;
