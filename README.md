@@ -29,10 +29,11 @@ All visual assets used are from the ZIP supplied by the user and are converted t
 
 ## Supabase setup
 1. Create a Supabase project.
-2. Copy `.env.example` to `.env.local`, then set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the project's URL and publishable/anon key.
+2. Set `NEXT_PUBLIC_SUPABASE_URL` and either `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the project's URL and browser-safe publishable/anon key. The app supports both key variable names.
 3. In Supabase SQL Editor, run `supabase/schema.sql` once on a fresh project.
 4. Create the author's Auth user with `refilwe@refilwemogosi.co.za`, then run the admin bootstrap update in the SQL file/README instructions and verify it updated exactly one profile.
 5. Configure email templates, redirect URLs, password recovery, storage policies and test row-level security with separate customer and admin accounts.
+6. For Vercel, add the two Supabase variables under **Project Settings → Environment Variables** for **Production** (and Preview/Development if needed), then redeploy. Supabase Auth must allow the production site URL and `https://www.refilwemogale.co.za/**` as a redirect URL.
 
 ## Important production-readiness boundary
 This is a complete multi-page **website starter and interactive local prototype**, not yet a production-ready commerce backend. The following must be completed and tested before public launch:
