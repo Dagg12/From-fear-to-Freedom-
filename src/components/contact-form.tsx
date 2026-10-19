@@ -10,7 +10,7 @@ export function ContactForm() {
     const data = new FormData(event.currentTarget);
     const subject = encodeURIComponent(`${data.get('topic')} enquiry from ${data.get('name')}`);
     const body = encodeURIComponent(`Name: ${data.get('name')}\nEmail: ${data.get('email')}\n\n${data.get('message')}`);
-    window.location.href = `mailto:refilwe@refilwemogosi.co.za?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:refilwe@refilwemogale.co.za?subject=${subject}&body=${body}`;
     setMessage('Your email app should open with this enquiry. The website has not sent or stored it.');
   }
   return <form onSubmit={submit} className="surface grid gap-4 p-6 sm:p-8">

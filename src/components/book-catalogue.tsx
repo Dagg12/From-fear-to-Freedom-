@@ -84,9 +84,11 @@ export function AddToCart({ bookId = 'from-fear-to-freedom' }: { bookId?: string
   }
 
   return <div>
-    <button type="button" disabled={!book} onClick={addBook} className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-60">
-      <ShoppingBag size={16}/>{book ? `Add to bag · ${book.currency} ${Number(book.price).toFixed(2)}` : 'Loading book…'}
-    </button>
+    {book
+      ? <button type="button" onClick={addBook} className="btn btn-primary">
+        <ShoppingBag size={16}/>{`Add to bag · ${book.currency} ${Number(book.price).toFixed(2)}`}
+      </button>
+      : <Link href="/shop" className="btn btn-primary"><ShoppingBag size={16}/>Browse bookstore</Link>}
     {message && <p role="status" className="mt-2 text-xs text-[#766b67]">{message}</p>}
   </div>;
 }
@@ -107,7 +109,10 @@ export function BookPrice({ bookId = 'from-fear-to-freedom' }: { bookId?: string
       .catch(() => { if (alive) setMessage('Unable to load the current price.'); });
     return () => { alive = false; };
   }, [bookId]);
-  if (!book) return <p role="status" className="text-xs text-[#897c75]">{message || 'Loading current price…'}</p>;
+  if (!book) return <div className="space-y-2">
+    <p role="status" className="text-xs text-[#897c75]">{message || 'See the bookstore for current price and availability.'}</p>
+    <Link href="/shop" className="text-xs font-bold text-[#581d2b] underline">Browse the bookstore</Link>
+  </div>;
   return <div className="space-y-1">
     <BookPriceTag book={book} className="font-display text-3xl text-[#581d2b]"/>
     <p className="text-xs text-[#897c75]">{book.is_preorder

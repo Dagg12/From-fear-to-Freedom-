@@ -7,14 +7,14 @@ import { AddToCart, BookPriceTag, type Book } from '@/components/book-catalogue'
 
 export function BookDetail({ slug }: { slug: string }) {
   const [book, setBook] = useState<Book | null>(null);
-  const [message, setMessage] = useState('Loading book…');
+  const [message, setMessage] = useState('');
   useEffect(() => {
     if (!hasSupabaseConfig()) {
       setMessage('The live bookstore is unavailable.');
       return;
     }
     let alive = true;
-    void createClient().from('books').select('*').eq('slug', slug).eq('is_published', true).maybeSingle()
+    void Promise.resolve(createClient().from('books').select('*').eq('slug', slug).eq('is_published', true).maybeSingle()
       .then(({ data, error }) => {
         if (!alive) return;
         if (error) setMessage('Unable to load this book.');
@@ -23,11 +23,17 @@ export function BookDetail({ slug }: { slug: string }) {
           setBook(data as Book);
           setMessage('');
         }
+      }))
+      .catch(() => {
+        if (alive) setMessage('Unable to load this book.');
       });
     return () => { alive = false; };
   }, [slug]);
 
-  if (!book) return <div className="container section-space"><p role="status" className="body-copy">{message}</p><Link href="/shop" className="btn btn-outline mt-5">Back to the bookstore</Link></div>;
+  if (!book) return <div className="container section-space">
+    <p role="status" className="body-copy">{message || 'Book details and purchase options are available in the bookstore.'}</p>
+    <Link href="/shop" className="btn btn-outline mt-5">Browse the bookstore</Link>
+  </div>;
   return <div className="container section-space">
     <Link href="/shop" className="text-xs font-bold text-[#581d2b] underline">Back to the bookstore</Link>
     <div className="mt-7 grid items-center gap-10 md:grid-cols-2">
