@@ -9,6 +9,7 @@ type CartLine = { id: string; qty: number };
 
 export function CheckoutPage() {
   const [form, setForm] = useState({ name: '', phone: '', address: '' });
+  const [promoCode, setPromoCode] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -47,6 +48,7 @@ export function CheckoutPage() {
         body: JSON.stringify({
           items: cart.map(({ id, qty }) => ({ id, quantity: qty })),
           customer: form,
+          promoCode: promoCode.trim() || undefined,
         }),
       });
       const result = await response.json();
@@ -75,7 +77,8 @@ export function CheckoutPage() {
       <label className="text-xs font-bold">Full name<input required maxLength={150} autoComplete="name" className="field mt-2" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}/></label>
       <label className="text-xs font-bold">Phone number<input type="tel" maxLength={40} autoComplete="tel" className="field mt-2" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })}/></label>
       <label className="text-xs font-bold sm:col-span-2">Delivery address<input required maxLength={1000} autoComplete="street-address" className="field mt-2" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })}/></label>
-      <p className="text-xs leading-5 text-[#766b67] sm:col-span-2">Book prices are verified against the live catalogue on the server. Pre-orders remain pending payment confirmation and are marked for later fulfilment when the publisher enters a release date.</p>
+      <label className="text-xs font-bold sm:col-span-2">Promo code (optional)<input maxLength={40} autoComplete="off" className="field mt-2 uppercase" placeholder="Enter code" value={promoCode} onChange={(event) => setPromoCode(event.target.value.toUpperCase())}/></label>
+      <p className="text-xs leading-5 text-[#766b67] sm:col-span-2">Book prices and promo codes are verified against the live catalogue on the server. The final discounted total is shown by PayFast before you pay. Pre-orders remain pending payment confirmation and are marked for later fulfilment when the publisher enters a release date.</p>
       {message && <div role="alert" className="rounded-lg bg-[#f6efe5] p-3 text-sm leading-5 text-[#694a41] sm:col-span-2">{message}
         {message.toLowerCase().includes('sign in') && <Link href="/login" className="ml-1 font-bold underline">Sign in</Link>}
       </div>}

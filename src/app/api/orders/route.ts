@@ -6,6 +6,7 @@ type CartLine = { id: string; quantity: number };
 type CheckoutRequest = {
   items?: unknown[];
   customer?: { name?: string; phone?: string; address?: string };
+  promoCode?: string;
 };
 type CreatedOrder = { id: string; order_number: string; total: number | string };
 
@@ -17,7 +18,8 @@ function isCheckoutRequest(value: unknown): value is CheckoutRequest {
   if (!isRecord(value) || !isRecord(value.customer) || !Array.isArray(value.items)) return false;
   return typeof value.customer.name === 'string' &&
     typeof value.customer.address === 'string' &&
-    (value.customer.phone === undefined || typeof value.customer.phone === 'string');
+    (value.customer.phone === undefined || typeof value.customer.phone === 'string') &&
+    (value.promoCode === undefined || typeof value.promoCode === 'string');
 }
 
 function isCartLine(value: unknown): value is CartLine {
@@ -87,6 +89,7 @@ export async function POST(request: Request) {
   if (!token || !input.customer?.name?.trim() || !input.customer.address?.trim() ||
     input.customer.name.trim().length > 150 || input.customer.address.trim().length > 1000 ||
     (input.customer.phone?.trim().length ?? 0) > 40 ||
+    (input.promoCode?.trim().length ?? 0) > 40 ||
     !Array.isArray(input.items) || input.items.length === 0 || input.items.length > 20) {
     return NextResponse.json({ error: 'Sign in and provide your name, delivery address, and at least one book.' }, { status: 400 });
   }
@@ -115,11 +118,12 @@ export async function POST(request: Request) {
     p_shipping_address: { address: input.customer.address.trim().slice(0, 1000) },
     p_shipping_total: shippingAmount,
     p_items: [...quantities].map(([id, quantity]) => ({ id, quantity })),
+    p_promo_code: input.promoCode?.trim() || null,
   }).maybeSingle();
   if (orderError || !isCreatedOrder(orderData)) {
     console.error('Unable to create checkout order:', orderError?.message);
     return NextResponse.json(
-      { error: orderError?.code === 'P0001' ? 'A book is unavailable or the order details could not be validated. Refresh your bag and try again.' : 'Unable to create this order right now.' },
+      { error: orderError?.code === 'P0001' ? orderError.message : 'Unable to create this order right now.' },
       { status: orderError?.code === 'P0001' ? 400 : 500 },
     );
   }
