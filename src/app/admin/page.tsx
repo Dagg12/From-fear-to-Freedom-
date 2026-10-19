@@ -1,1 +1,5 @@
-import {AdminDashboard} from '@/components/store-ui';export default function Admin(){return <AdminDashboard/>}
+import {AdminDashboard} from '@/components/admin-dashboard';
+
+export default function Admin() {
+  return <AdminDashboard />;
+}

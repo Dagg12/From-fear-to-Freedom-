@@ -1,1 +1,5 @@
-import {CartPage} from '@/components/store-ui';export default function Cart(){return <CartPage/>}
+import { CartPage } from '@/components/cart-page';
+
+export default function Cart() {
+  return <CartPage />;
+}

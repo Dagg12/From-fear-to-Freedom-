@@ -1,1 +1,6 @@
-import Link from 'next/link';import {CalendarDays,ArrowRight} from 'lucide-react';export function generateStaticParams(){return [{slug:'upcoming-appearance'}]}export default async function EventDetail({params}:{params:Promise<{slug:string}>}){const {slug}=await params;return <div className="container section-space max-w-3xl"><Link href="/events" className="text-xs font-bold underline">← All events</Link><div className="surface mt-7 p-7 sm:p-10"><CalendarDays size={28} className="text-[#b99a62]"/><p className="eyebrow mt-5">Event details</p><h1 className="heading mt-3">An upcoming conversation.</h1><p className="body-copy mt-5">No confirmed event details are available yet for <strong>{slug.replaceAll('-',' ')}</strong>. This event detail page is ready for the organiser to publish a confirmed title, date, location, booking link and accessibility information.</p><Link href="/contact" className="btn btn-primary mt-6">Enquire about appearances <ArrowRight size={15}/></Link></div></div>}
+import { EventDetail } from '@/components/event-detail';
+
+export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  return <EventDetail slug={slug}/>;
+}

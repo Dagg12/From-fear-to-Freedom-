@@ -38,6 +38,7 @@ create table public.books (
   format text not null default 'Paperback',
   stock_quantity integer check (stock_quantity is null or stock_quantity >= 0),
   is_preorder boolean not null default true,
+  available_on date,
   is_published boolean not null default false,
   featured boolean not null default false,
   created_at timestamptz not null default now(),
@@ -76,6 +77,9 @@ create table public.order_items (
   title_snapshot text not null,
   unit_price numeric(12,2) not null check (unit_price >= 0),
   quantity integer not null check (quantity > 0),
+  is_preorder boolean not null default false,
+  available_on date,
+  stock_reserved boolean not null default false,
   line_total numeric(12,2) generated always as (unit_price * quantity) stored
 );
 
@@ -179,6 +183,7 @@ create index books_published_idx on public.books (is_published, featured);
 create index orders_user_created_idx on public.orders (user_id, created_at desc);
 create index orders_status_idx on public.orders (status, created_at desc);
 create index order_items_order_idx on public.order_items (order_id);
+create unique index orders_payment_reference_idx on public.orders (payment_reference) where payment_reference is not null;
 create index reviews_public_idx on public.reviews (book_id, status, created_at desc);
 create index events_public_idx on public.events (status, starts_at);
 create index campaigns_public_idx on public.campaigns (status, starts_at, ends_at);
@@ -260,17 +265,16 @@ using (public.is_admin()) with check (public.is_admin());
 
 create policy "Customers read own orders; admins read all" on public.orders for select
 using (user_id = auth.uid() or public.is_admin());
-create policy "Signed-in users create own pending orders" on public.orders for insert
-with check (auth.uid() is not null and user_id = auth.uid() and status = 'pending');
 create policy "Admins manage orders" on public.orders for update
 using (public.is_admin()) with check (public.is_admin());
 
 create policy "Order items visible to order owner or admin" on public.order_items for select
 using (exists (select 1 from public.orders o where o.id = order_id and (o.user_id = auth.uid() or public.is_admin())));
-create policy "Order items inserted for own pending order" on public.order_items for insert
-with check (exists (select 1 from public.orders o where o.id = order_id and o.user_id = auth.uid() and o.status = 'pending'));
 create policy "Admins manage order items" on public.order_items for all
 using (public.is_admin()) with check (public.is_admin());
+
+-- Customer order creation is performed only by the service-role checkout RPC.
+revoke insert on public.orders, public.order_items from anon, authenticated;
 
 create policy "Active promo codes are readable" on public.promo_codes for select
 using ((is_active = true and starts_at <= now() and (expires_at is null or expires_at > now())) or public.is_admin());
@@ -344,6 +348,6 @@ using (bucket_id = 'user-avatars' and auth.uid()::text = (storage.foldername(nam
 revoke update on public.profiles from authenticated;
 grant update (full_name, phone, avatar_path, updated_at) on public.profiles to authenticated;
 
--- Admin bootstrap: first create/sign up the author's account, then run this once
+-- Admin bootstrap: first create/sign up the administrator's account, then run this once
 -- from SQL Editor using the exact account email. Never expose admin escalation to clients.
--- update public.profiles set is_admin = true where email = 'refilwe@refilwemogosi.co.za';
+-- update public.profiles set is_admin = true where email = 'admin@example.com';

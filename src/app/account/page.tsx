@@ -1,1 +1,5 @@
-import {AccountDashboard} from '@/components/store-ui';export default function Account(){return <AccountDashboard/>}
+import {AccountDashboard} from '@/components/account-dashboard';
+
+export default function Account() {
+  return <AccountDashboard />;
+}

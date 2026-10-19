@@ -1,1 +1,23 @@
-import type { Metadata } from 'next';import './globals.css';import {SiteHeader,SiteFooter} from '@/components/site-shell';export const metadata:Metadata={title:{default:'From Fear to Freedom | Refilwe Mokgosi-Mogale',template:'%s | From Fear to Freedom'},description:'Discover From Fear to Freedom by South African author Refilwe Mokgosi-Mogale — a memoir of courage, resilience, endurance and finding your voice.',openGraph:{title:'From Fear to Freedom',description:'You do not have to begin fearless. You can begin willing.',type:'website',images:[{url:'/images/book-cover.webp',width:1900,height:1333,alt:'From Fear to Freedom book cover'}]},robots:{index:true,follow:true}};export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en-ZA"><body><SiteHeader/><main className="min-h-[60vh]">{children}</main><SiteFooter/></body></html>}
+import type { Metadata } from 'next';
+import './globals.css';
+import { SiteFooter, SiteHeader } from '@/components/site-shell';
+
+export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.refilwemogale.co.za'),
+  title: {
+    default: 'From Fear to Freedom | Refilwe Mokgosi-Mogale',
+    template: '%s | From Fear to Freedom',
+  },
+  description: 'Discover From Fear to Freedom by South African author Refilwe Mokgosi-Mogale — a memoir of courage, resilience, endurance and finding your voice.',
+  openGraph: {
+    title: 'From Fear to Freedom',
+    description: 'You do not have to begin fearless. You can begin willing.',
+    type: 'website',
+    images: [{ url: '/images/book-cover.webp', width: 1900, height: 1333, alt: 'From Fear to Freedom book cover' }],
+  },
+  robots: { index: true, follow: true },
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <html lang="en-ZA"><body><SiteHeader/><main className="min-h-[60vh]">{children}</main><SiteFooter/></body></html>;
+}

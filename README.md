@@ -1,75 +1,63 @@
-# From Fear to Freedom — author platform & bookstore
+# From Fear to Freedom — author platform and bookstore
 
-A responsive Next.js 15 / React 19 / TypeScript / Tailwind website for Refilwe Mokgosi-Mogale. The original supplied cover, author portraits, endurance photographs and supplied social-profile screenshots are included in `public/images/`. The design uses Cormorant Garamond + DM Sans and a burgundy, cream, warm gold palette.
+Responsive Next.js 15 / React 19 / TypeScript website for Refilwe Mokgosi-Mogale. The supplied author and book imagery is in `public/images/`.
 
-## Run in VS Code (Windows)
-1. Extract the ZIP and open the extracted project folder in VS Code (**File → Open Folder**).
-2. Open **Terminal → New Terminal**.
-3. Install Node.js LTS from https://nodejs.org if `node -v` is not recognized.
-4. Run `npm install`.
-5. Copy `.env.example` to `.env.local` if you want to connect Supabase. Without credentials, the login/dashboard/order controls are clearly labelled local preview mode.
-6. Run `npm run dev` and open http://localhost:3000.
-7. Run `npm run typecheck` and `npm run build` before deployment.
+## Run locally
 
-## Routes included
-- `/` Home
-- `/book` Book detail and add-to-cart
-- `/shop` Store catalogue
-- `/cart` Cart, quantity editing and sample promo code
-- `/checkout` Order-request flow (local preview only)
-- `/about`, `/journey`, `/speaking`, `/events`, `/events/[slug]`, `/media`, `/journal`, `/journal/[slug]`
-- `/reviews`, `/specials`, `/contact`
-- `/login` Login / registration / reset UI (Supabase auth is attempted when credentials are configured; local demo mode otherwise)
-- `/account` Reader dashboard (local preview order history)
-- `/admin` Admin dashboard preview (catalogue settings, order view, reviews, events, promotions, customer section)
-- `/wishlist`, `/privacy`, `/terms`
-
-## Assets and social profiles
-All visual assets used are from the ZIP supplied by the user and are converted to optimized WebP files in `public/images/`. Social profile screenshots are included as supplied assets. Instagram and TikTok links use the `mogalerefilwe` handle visible in the screenshots. Facebook and LinkedIn use search URLs because the screenshots did not reveal a verified direct profile URL; confirm those URLs with the author before publishing.
+1. Install Node.js LTS and run `npm install`.
+2. Copy `.env.example` to `.env.local` and fill in the values needed for the feature you are testing.
+3. Run `npm run dev`, then open http://localhost:3000.
+4. Before deploying, run `npm run typecheck` and `npm run build`.
 
 ## Supabase setup
-1. Create a Supabase project.
-2. Set `NEXT_PUBLIC_SUPABASE_URL` and either `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the project's URL and browser-safe publishable/anon key. The app supports both key variable names.
-3. In Supabase SQL Editor, run `supabase/schema.sql` once on a fresh project.
-4. Create the author's Auth user with `refilwe@refilwemogosi.co.za`, then run the admin bootstrap update in the SQL file/README instructions and verify it updated exactly one profile.
-5. Configure email templates, redirect URLs, password recovery, storage policies and test row-level security with separate customer and admin accounts.
-6. For Vercel, add the two Supabase variables under **Project Settings → Environment Variables** for **Production** (and Preview/Development if needed), then redeploy. Supabase Auth must allow the production site URL and `https://www.refilwemogale.co.za/**` as a redirect URL.
 
-## Important production-readiness boundary
-This is a complete multi-page **website starter and interactive local prototype**, not yet a production-ready commerce backend. The following must be completed and tested before public launch:
-- Move order creation, order-total calculation, promo validation, stock/preorder checks and order status updates into trusted server-side functions or API routes. Never trust browser prices, discounts, roles or localStorage.
-- Enforce admin access on the server and in Supabase RLS. The browser-side admin screen is a UI prototype only and must not be treated as secure access control.
-- Connect cart/account/order/review/event/campaign screens to Supabase queries and storage uploads; apply least-privilege RLS policies and test with real non-admin users.
-- Connect a payment provider (e.g. a supported South African provider), webhooks, refund handling and reconciliation. No live payment processing is included.
-- Connect contact form delivery and newsletter sign-up to a trusted email/CRM service, with anti-spam controls and opt-in consent.
-- Confirm final book price, stock/print fulfilment, shipping, taxes/VAT treatment, return policy, order confirmation, and all public social profile URLs.
-- Replace draft Privacy and Terms pages with reviewed policies that match the actual processing and South African legal requirements (including POPIA and applicable consumer/e-commerce requirements).
-- Update `metadataBase` in `src/app/layout.tsx` to the real domain, then set production metadata, analytics/consent controls, monitoring, error reporting and backups.
-- Run dependency/security checks, accessibility review (keyboard, contrast, screen reader), mobile/browser QA, and full end-to-end testing before launch.
+1. Create a Supabase project. Set `NEXT_PUBLIC_SUPABASE_URL` and either `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the project URL and browser-safe key.
+2. In Supabase SQL Editor, run `supabase/schema.sql` on a new project, then run each SQL file in `supabase/migrations/` in filename order. On an existing project, apply only the migrations that have not already been applied; do not rerun the non-idempotent base schema.
+3. In Supabase Auth, create or confirm your administrator account. Then grant it the database admin role in SQL Editor:
+   ```sql
+   update public.profiles
+   set is_admin = true
+   where email = 'admin@example.com';
+   ```
+   Replace the example with the exact account email and verify one profile row was updated. Admin access is checked against `profiles.is_admin`, never the email address in browser code.
+4. Set the Supabase Site URL and allow-list the production URL and `/login` callback URLs used for email confirmation and password recovery. Test register, confirm, sign-in, reset, and sign-out.
+5. In `/admin`, add the real book catalogue entries, verified prices, stock limits, and any preorder fulfilment dates. Set a book to published to make it visible in `/shop`.
 
-## Demo data warning
-The demo checkout saves order requests to the current browser only and does not charge money or send a real order. The sample `COURAGE10` discount is only a front-end demonstration. Do not use real passwords or customer data in preview mode.
+## Store, reader accounts, and pre-orders
 
-## Production launch checklist (October 2026)
+- Reader sign-in uses Supabase Auth. `/account` loads the signed-in Supabase profile and that user's database orders; it no longer treats browser-local demo orders as a registered account.
+- The admin catalogue, public storefront, and checkout all use the same `books` rows. Prices are read and checked server-side, not trusted from the browser cart.
+- A pre-order is a published book with **Accept as a pre-order** enabled. Set its expected fulfilment date when known. That preorder flag and date are snapshotted into the order item so later catalogue edits do not rewrite an existing order.
+- Checkout requires an authenticated reader, server-only `SUPABASE_SERVICE_ROLE_KEY`, PayFast merchant variables, and a configured flat `BOOK_SHIPPING_ZAR` amount. The database checkout function creates the order and reserves finite in-stock quantities atomically; cancelling an unpaid order releases those reserved copies.
+- The PayFast ITN handler verifies the signature, calls PayFast's server validation endpoint, checks the merchant, payment status, order reference, and amount, and only then marks an order paid. A browser return from PayFast is not proof of payment.
+- The admin order screen can manage statuses and the reviews screen moderates submitted reviews. Inventory reservations for unpaid orders are released when an admin cancels the order.
+- Wishlist, newsletter signup, and reader reviews use Supabase. Contact enquiries open the visitor's email application and are not stored or sent by the website.
 
-1. **Rotate exposed credentials first.** Revoke the exposed Supabase secret key and issue a replacement in Supabase. Change the PayFast merchant key/passphrase if those values were exposed. Never put Supabase secret/service-role keys or PayFast passphrases in `NEXT_PUBLIC_*` variables or commit them.
-2. Copy `.env.example` to `.env.local` for local development and fill in the newly rotated credentials. Use the Supabase publishable/anon key only for browser access. Keep `PAYFAST_*` values server-side.
-3. Set `NEXT_PUBLIC_SITE_URL` to the real HTTPS production domain. Set `PAYFAST_SANDBOX=true` for testing and change to `false` only after test transactions and merchant configuration are verified.
-4. Set the administrator email in `NEXT_PUBLIC_ADMIN_EMAIL` for the UI guard and configure the matching administrator account in Supabase Auth. Do not treat a client-side UI guard as database security: enforce administrator roles in Supabase RLS policies and server-side authorization before using admin write operations.
-5. Configure Supabase Auth email templates and the production Site URL / redirect allow-list. Test signup, verification email, sign-in, password reset, sign-out and denied access for a normal customer account.
-6. **Payment notification is intentionally fail-closed.** `/api/payfast/notify` currently returns HTTP 501. Do not launch live payments or represent an order as paid until the PayFast ITN endpoint validates the sender, verifies the signature, checks payment status and amount against a server-created order, and persists the verified result in Supabase. The checkout endpoint uses a fixed R320 product amount and is a starter integration, not a complete order-management implementation.
-7. Run `npm install`, `npm run typecheck`, and `npm run build`; fix all reported errors. Deploy to a supported Next.js host, configure environment variables there, and test the production domain and mobile layouts.
+## Deployment configuration
 
-The homepage hero now features Refilwe alone (the book imagery remains on book/product sections), and Journal / reflection photography uses contain sizing to avoid cropping supplied photos.
+Add these environment variables to the hosting provider's Production environment and redeploy:
 
-## Production launch checklist
+| Variable | Purpose | Exposure |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Public |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`) | Supabase browser access | Public |
+| `SUPABASE_SERVICE_ROLE_KEY` | Trusted order creation and payment notifications | **Server only; never use `NEXT_PUBLIC_`** |
+| `NEXT_PUBLIC_SITE_URL` | Canonical HTTPS website URL and payment callbacks | Public |
+| `PAYFAST_MERCHANT_ID` | PayFast merchant identifier | Server only |
+| `PAYFAST_MERCHANT_KEY` | PayFast merchant key | Server only |
+| `PAYFAST_PASSPHRASE` | Optional PayFast signature passphrase, if enabled for the merchant | Server only |
+| `PAYFAST_SANDBOX` | `true` for sandbox (default); use `false` only for the approved live merchant account | Server only |
+| `BOOK_SHIPPING_ZAR` | Verified flat shipping charge per order in ZAR; checkout is disabled if unset | Server only |
 
-1. Rotate exposed credentials first. Revoke the exposed Supabase secret key and issue a replacement in Supabase. Change the PayFast merchant key/passphrase if those values were exposed. Never put Supabase secret/service-role keys or PayFast passphrases in `NEXT_PUBLIC_*` variables or commit them.
-2. Copy `.env.example` to `.env.local` for local development and fill in newly rotated credentials. Use the Supabase publishable/anon key only for browser access. Keep `PAYFAST_*` values server-side.
-3. Set `NEXT_PUBLIC_SITE_URL` to the real HTTPS production domain. Keep `PAYFAST_SANDBOX=true` for testing and change to `false` only after test transactions and merchant configuration are verified.
-4. Set `NEXT_PUBLIC_ADMIN_EMAIL` for the UI guard and configure the matching administrator account in Supabase Auth. A client-side UI guard is not database security: enforce administrator roles in Supabase RLS policies and server-side authorization before using admin write operations.
-5. Configure Supabase Auth email templates and the production Site URL / redirect allow-list. Test signup, verification email, sign-in, password reset, sign-out and denied access for a normal customer account.
-6. Payment notification is intentionally fail-closed. `/api/payfast/notify` currently returns HTTP 501. Do not launch live payments or represent an order as paid until the PayFast ITN endpoint validates the sender, verifies the signature, checks payment status and amount against a server-created order, and persists the verified result in Supabase. The checkout endpoint uses a fixed R320 product amount and is a starter integration, not a complete order-management implementation.
-7. Run `npm install`, `npm run typecheck`, and `npm run build`; fix all reported errors. Deploy to a supported Next.js host, configure environment variables there, and test the production domain and mobile layouts.
+Keep these variables out of source control and chat. Rotate any credentials that have already been exposed. After adding or changing deployment variables, redeploy the application. Set the domain in Supabase Auth's redirect allow-list as well as `NEXT_PUBLIC_SITE_URL`.
 
-The homepage hero now features Refilwe alone (book imagery remains on book/product sections), and Journal / reflection photography uses contain sizing to avoid cropping supplied photos.
+## Before accepting live orders
+
+- Complete a PayFast sandbox transaction and verify that its ITN reaches the deployed `/api/payfast/notify` URL and changes only the matching pending order. Do not use live mode until the PayFast merchant account and domain are approved.
+- Confirm product prices, shipping coverage/rates, VAT treatment, stock and preorder fulfilment promises, cancellations/refunds, and the published privacy/returns/terms policies. `BOOK_SHIPPING_ZAR` is currently one flat charge for the whole order; different rates by address/weight are not implemented.
+- Add an email delivery service for order confirmations, shipping notices, review moderation and newsletter double opt-in/unsubscribe. Newsletter subscriptions are stored, but the current feature does not send confirmation emails or process automated unsubscribe requests.
+- The admin dashboard is protected by Supabase Auth and RLS but is a browser client, not a separate server-rendered admin application. Keep RLS enabled and use only the provided safe policies; do not grant the service-role key to the browser.
+- Review static editorial/event content, contact destinations, social links, and the legal copy before public launch. Monitor webhook failures and reconcile refunds/chargebacks with PayFast.
+- Configure backups, monitoring, abuse/rate controls, and production-domain/mobile/accessibility checks with your hosting and Supabase providers.
+
+The deployed hosting project and DNS cannot be changed from this source workspace. Set `NEXT_PUBLIC_SITE_URL` to the domain you control, configure its hosting environment variables and DNS, and deploy this build through the hosting provider.
