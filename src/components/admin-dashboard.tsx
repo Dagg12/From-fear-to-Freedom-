@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createClient, hasSupabaseConfig } from '@/lib';
 import type { Book } from '@/components/book-catalogue';
@@ -46,12 +46,16 @@ const initialForm = {
   subtitle: '',
   description: '',
   price: '',
+  compareAtPrice: '',
   format: 'Paperback',
   coverPath: '',
   stock: '',
-  isPreorder: true,
+  category: '',
+  isbn: '',
+  isPreorder: false,
   availableOn: '',
-  isPublished: false,
+  isPublished: true,
+  featured: false,
 };
 const initialEventForm = {
   title: '',
@@ -75,10 +79,13 @@ export function AdminDashboard() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [events, setEvents] = useState<StoreEvent[]>([]);
   const [form, setForm] = useState(initialForm);
+  const [editingBookId, setEditingBookId] = useState<string | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [eventForm, setEventForm] = useState(initialEventForm);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = useCallback(async () => {
     const supabase = createClient();
@@ -125,38 +132,118 @@ export function AdminDashboard() {
     return () => { alive = false; };
   }, [loadData]);
 
-  async function addBook(event: FormEvent<HTMLFormElement>) {
+  function clearBookForm() {
+    setForm(initialForm);
+    setEditingBookId(null);
+    setCoverFile(null);
+    if (coverInputRef.current) coverInputRef.current.value = '';
+  }
+
+  function editBook(book: Book) {
+    setEditingBookId(book.id);
+    setCoverFile(null);
+    setForm({
+      title: book.title,
+      slug: book.slug,
+      subtitle: book.subtitle ?? '',
+      description: book.description,
+      price: String(book.price),
+      compareAtPrice: book.compare_at_price == null ? '' : String(book.compare_at_price),
+      format: book.format,
+      coverPath: book.cover_path ?? '',
+      stock: book.stock_quantity == null ? '' : String(book.stock_quantity),
+      category: book.category ?? '',
+      isbn: book.isbn ?? '',
+      isPreorder: book.is_preorder,
+      availableOn: book.available_on ?? '',
+      isPublished: book.is_published,
+      featured: book.featured,
+    });
+    setError('');
+    setNotice('');
+    if (coverInputRef.current) coverInputRef.current.value = '';
+  }
+
+  async function saveBook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
     setNotice('');
     const price = Number(form.price);
+    const compareAtPrice = form.compareAtPrice.trim() ? Number(form.compareAtPrice) : null;
     const stock = form.stock.trim() ? Number(form.stock) : null;
-    if (!Number.isFinite(price) || price <= 0 || (stock !== null && (!Number.isInteger(stock) || stock < 0))) {
-      setError('Enter a valid price and a whole-number stock quantity.');
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug.trim())) {
+      setError('Use a lowercase URL slug with letters, numbers, and single hyphens.');
+      return;
+    }
+    if (!Number.isFinite(price) || price <= 0 ||
+      (compareAtPrice !== null && (!Number.isFinite(compareAtPrice) || compareAtPrice <= price)) ||
+      (stock !== null && (!Number.isInteger(stock) || stock < 0))) {
+      setError('Enter a valid selling price, a higher original price for promotions, and a whole-number stock quantity.');
       return;
     }
     setSaving(true);
+    const supabase = createClient();
+    let uploadedObjectPath: string | null = null;
+    let bookSaved = false;
     try {
-      const { error: insertError } = await createClient().from('books').insert({
+      let coverPath = form.coverPath.trim() || null;
+      if (coverFile) {
+        const extensionByType: Record<string, string> = {
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+        };
+        const extension = extensionByType[coverFile.type];
+        if (!extension || coverFile.size > 10 * 1024 * 1024) {
+          throw new Error('Choose a JPEG, PNG, or WebP image no larger than 10 MB.');
+        }
+        const objectPath = `${form.slug.trim()}/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage.from('book-covers').upload(objectPath, coverFile, {
+          cacheControl: '3600',
+          contentType: coverFile.type,
+          upsert: false,
+        });
+        if (uploadError) throw uploadError;
+        uploadedObjectPath = objectPath;
+        coverPath = supabase.storage.from('book-covers').getPublicUrl(uploadedObjectPath).data.publicUrl;
+      }
+      const bookData = {
         title: form.title.trim(),
         slug: form.slug.trim(),
         subtitle: form.subtitle.trim() || null,
         description: form.description.trim(),
         price,
+        compare_at_price: compareAtPrice,
         currency: 'ZAR',
         format: form.format.trim(),
-        cover_path: form.coverPath.trim() || null,
+        cover_path: coverPath,
         stock_quantity: stock,
+        category: form.category.trim() || null,
+        isbn: form.isbn.trim() || null,
         is_preorder: form.isPreorder,
         available_on: form.availableOn || null,
         is_published: form.isPublished,
-        featured: false,
-      });
-      if (insertError) throw insertError;
-      await loadData();
-      setForm(initialForm);
-      setNotice('Book saved to the catalogue. Published books are now available in the storefront.');
+        featured: form.featured,
+      };
+      const result = editingBookId
+        ? await supabase.from('books').update(bookData).eq('id', editingBookId)
+        : await supabase.from('books').insert(bookData);
+      if (result.error) throw result.error;
+      bookSaved = true;
+      clearBookForm();
+      setNotice(editingBookId
+        ? 'Book updated. Published changes are now visible in the storefront.'
+        : 'Book added to the catalogue. Published books are now available in the storefront.');
+      try {
+        await loadData();
+      } catch (cause) {
+        setError(`The book was saved, but the catalogue could not be refreshed: ${cause instanceof Error ? cause.message : 'Unknown error.'}`);
+      }
     } catch (cause) {
+      if (uploadedObjectPath && !bookSaved) {
+        const { error: cleanupError } = await supabase.storage.from('book-covers').remove([uploadedObjectPath]);
+        if (cleanupError) console.error('Could not remove an unused book cover upload:', cleanupError.message);
+      }
       setError(cause instanceof Error ? cause.message : 'Could not save this book.');
     } finally {
       setSaving(false);
@@ -274,27 +361,66 @@ export function AdminDashboard() {
       <section className="surface min-h-[380px] p-5 sm:p-8">
         {tab === 'books' ? <>
           <h2 className="font-display text-3xl text-[#581d2b]">Books and pre-orders</h2>
-          <form onSubmit={addBook} className="mt-6 grid gap-4 md:grid-cols-2">
+          <form onSubmit={saveBook} className="mt-6 grid gap-4 md:grid-cols-2">
             <label className="text-xs font-bold">Book title<input required className="field mt-2" value={form.title} onChange={(event) => {
               const title = event.target.value;
               setForm((current) => ({ ...current, title, slug: current.slug || title.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') }));
             }}/></label>
             <label className="text-xs font-bold">URL slug<input required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className="field mt-2" value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })}/></label>
             <label className="text-xs font-bold">Subtitle<input className="field mt-2" value={form.subtitle} onChange={(event) => setForm({ ...form, subtitle: event.target.value })}/></label>
-            <label className="text-xs font-bold">Price (ZAR)<input required type="number" min="0.01" step="0.01" className="field mt-2" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })}/></label>
+            <label className="text-xs font-bold">Selling price (ZAR)<input required type="number" min="0.01" step="0.01" className="field mt-2" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })}/></label>
+            <label className="text-xs font-bold">Original price for a promotion (ZAR, optional)<input type="number" min="0.01" step="0.01" className="field mt-2" value={form.compareAtPrice} onChange={(event) => setForm({ ...form, compareAtPrice: event.target.value })}/><span className="mt-1 block font-normal text-[#766b67]">Enter a higher price to show a discount. The price above is the amount charged at checkout.</span></label>
             <label className="text-xs font-bold md:col-span-2">Description<textarea className="field mt-2 min-h-24" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })}/></label>
-            <label className="text-xs font-bold">Cover image URL or path<input className="field mt-2" placeholder="/images/book-product.webp" value={form.coverPath} onChange={(event) => setForm({ ...form, coverPath: event.target.value })}/></label>
+            <div className="text-xs font-bold">
+              <label htmlFor="book-cover-file">Book cover image</label>
+              <input
+                ref={coverInputRef}
+                id="book-cover-file"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="field mt-2"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0] ?? null;
+                  if (file && (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024)) {
+                    setCoverFile(null);
+                    event.currentTarget.value = '';
+                    setError('Choose a JPEG, PNG, or WebP image no larger than 10 MB.');
+                    return;
+                  }
+                  setError('');
+                  setCoverFile(file);
+                }}
+              />
+              <span className="mt-1 block font-normal text-[#766b67]">Choose a file from this device. Maximum 10 MB; JPEG, PNG, and WebP supported.</span>
+              {coverFile && <span className="mt-1 block font-normal text-[#581d2b]">Selected: {coverFile.name}</span>}
+              {!coverFile && form.coverPath && <img src={form.coverPath} alt="Current book cover" className="mt-3 h-24 w-20 rounded object-cover"/>}
+            </div>
             <label className="text-xs font-bold">Format<input required className="field mt-2" value={form.format} onChange={(event) => setForm({ ...form, format: event.target.value })}/></label>
             <label className="text-xs font-bold">Stock quantity (leave blank if unlimited)<input type="number" min="0" step="1" className="field mt-2" value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })}/></label>
-            <label className="text-xs font-bold">Pre-order fulfilment date<input type="date" className="field mt-2" value={form.availableOn} onChange={(event) => setForm({ ...form, availableOn: event.target.value })}/></label>
-            <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={form.isPreorder} onChange={(event) => setForm({ ...form, isPreorder: event.target.checked })}/> Accept as a pre-order</label>
+            <label className="text-xs font-bold">Category (optional)<input className="field mt-2" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}/></label>
+            <label className="text-xs font-bold">ISBN (optional)<input className="field mt-2" value={form.isbn} onChange={(event) => setForm({ ...form, isbn: event.target.value })}/></label>
+            <label className="text-xs font-bold">Sale type<select className="field mt-2" value={form.isPreorder ? 'preorder' : 'standard'} onChange={(event) => setForm({ ...form, isPreorder: event.target.value === 'preorder' })}><option value="standard">Standard sale — available now</option><option value="preorder">Pre-sale / pre-order — fulfil later</option></select></label>
+            {form.isPreorder && <label className="text-xs font-bold">Expected fulfilment date (optional)<input type="date" className="field mt-2" value={form.availableOn} onChange={(event) => setForm({ ...form, availableOn: event.target.value })}/></label>}
+            <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={form.featured} onChange={(event) => setForm({ ...form, featured: event.target.checked })}/> Feature this book in the storefront</label>
             <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={form.isPublished} onChange={(event) => setForm({ ...form, isPublished: event.target.checked })}/> Publish in the storefront immediately</label>
-            <button disabled={saving} className="btn btn-primary md:col-span-2">{saving ? 'Saving…' : 'Add book to catalogue'}</button>
+            <div className="flex flex-wrap gap-3 md:col-span-2">
+              <button disabled={saving} className="btn btn-primary">{saving ? 'Saving…' : editingBookId ? 'Save book changes' : 'Add book to catalogue'}</button>
+              {editingBookId && <button type="button" disabled={saving} onClick={clearBookForm} className="btn btn-outline">Cancel editing</button>}
+            </div>
           </form>
-          <div className="mt-8 space-y-3">{books.map((book) => <article key={book.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#fbf7f0] p-4">
-            <div><p className="font-semibold">{book.title}</p><p className="mt-1 text-xs text-[#766b67]">{book.currency} {Number(book.price).toFixed(2)} · {book.is_preorder ? `Pre-order${book.available_on ? ` until ${book.available_on}` : ''}` : 'Standard sale'} · {book.is_published ? 'Published' : 'Draft'}</p></div>
-            <button type="button" onClick={() => void setPublication(book, !book.is_published)} className="btn btn-outline !py-2">{book.is_published ? 'Unpublish' : 'Publish'}</button>
-          </article>)}</div>
+          <div className="mt-8 space-y-3">{books.map((book) => {
+            const hasPromotion = book.compare_at_price != null && Number(book.compare_at_price) > Number(book.price);
+            return <article key={book.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#fbf7f0] p-4">
+              <div className="flex min-w-0 items-center gap-4">
+                <img src={book.cover_path || '/images/book-product.webp'} alt="" className="h-20 w-16 rounded object-cover"/>
+                <div><p className="font-semibold">{book.title}</p><p className="mt-1 text-xs text-[#766b67]">{book.currency} {Number(book.price).toFixed(2)}{hasPromotion && ` · Promotion (was ${book.currency} ${Number(book.compare_at_price).toFixed(2)})`} · {book.is_preorder ? `Pre-sale${book.available_on ? ` · expected ${book.available_on}` : ''}` : 'Standard sale'} · {book.is_published ? 'Published' : 'Draft'}</p></div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => editBook(book)} className="btn btn-outline !py-2">Edit</button>
+                <button type="button" onClick={() => void setPublication(book, !book.is_published)} className="btn btn-outline !py-2">{book.is_published ? 'Unpublish' : 'Publish'}</button>
+              </div>
+            </article>;
+          })}</div>
         </> : tab === 'orders' ? <>
           <h2 className="font-display text-3xl text-[#581d2b]">Orders and fulfilment</h2>
           <div className="mt-6 space-y-3">{orders.length === 0 ? <p className="body-copy text-sm">No customer orders yet.</p> : orders.map((order) => <article key={order.id} className="rounded-xl bg-[#fbf7f0] p-4">

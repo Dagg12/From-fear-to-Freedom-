@@ -12,14 +12,28 @@ export type Book = {
   subtitle: string | null;
   description: string;
   price: number;
+  compare_at_price: number | null;
   currency: string;
   cover_path: string | null;
+  category: string | null;
+  isbn: string | null;
   format: string;
   stock_quantity: number | null;
   is_preorder: boolean;
   available_on: string | null;
   is_published: boolean;
+  featured: boolean;
 };
+
+export function BookPriceTag({ book, className = '' }: { book: Book; className?: string }) {
+  const price = Number(book.price);
+  const compareAtPrice = Number(book.compare_at_price);
+  const hasPromotion = Number.isFinite(compareAtPrice) && compareAtPrice > price;
+  return <p className={className}>
+    <span className={hasPromotion ? 'font-bold text-[#8c263b]' : ''}>{book.currency} {price.toFixed(2)}</span>
+    {hasPromotion && <del className="ml-2 text-[#897c75]">{book.currency} {compareAtPrice.toFixed(2)}</del>}
+  </p>;
+}
 
 export function AddToCart({ bookId = 'from-fear-to-freedom' }: { bookId?: string }) {
   const [book, setBook] = useState<Book | null>(null);
@@ -95,7 +109,7 @@ export function BookPrice({ bookId = 'from-fear-to-freedom' }: { bookId?: string
   }, [bookId]);
   if (!book) return <p role="status" className="text-xs text-[#897c75]">{message || 'Loading current price…'}</p>;
   return <div className="space-y-1">
-    <p className="font-display text-3xl text-[#581d2b]">{book.currency} {Number(book.price).toFixed(2)}</p>
+    <BookPriceTag book={book} className="font-display text-3xl text-[#581d2b]"/>
     <p className="text-xs text-[#897c75]">{book.is_preorder
       ? `Pre-order${book.available_on ? ` for ${new Date(`${book.available_on}T00:00:00`).toLocaleDateString()}` : ''}`
       : book.stock_quantity === 0 ? 'Currently out of stock' : 'Available now'}</p>
@@ -135,7 +149,7 @@ export function BookCatalogue() {
         <p className="eyebrow">{book.is_preorder ? 'Pre-order' : 'Available now'} · {book.format}</p>
         <h2 className="font-display text-2xl text-[#581d2b]">{book.title}</h2>
         {book.subtitle && <p className="text-sm italic text-[#7b625b]">{book.subtitle}</p>}
-        <p className="text-sm font-semibold">{book.currency} {Number(book.price).toFixed(2)}</p>
+        <BookPriceTag book={book} className="text-sm font-semibold"/>
         <AddToCart bookId={book.slug}/>
       </div>
     </article>)}</div>

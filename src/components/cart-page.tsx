@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Minus, Plus, Trash2 } from 'lucide-react';
 import { createClient, hasSupabaseConfig } from '@/lib';
-import type { Book } from '@/components/book-catalogue';
+import { BookPriceTag, type Book } from '@/components/book-catalogue';
 
 type CartItem = { id: string; qty: number };
 
@@ -86,7 +86,7 @@ export function CartPage() {
             <img src={book.cover_path || '/images/book-product.webp'} alt={`${book.title} cover`} className="w-24 rounded-md object-contain sm:w-32"/>
             <div className="flex flex-1 flex-col justify-between gap-4"><div>
               <h2 className="font-display text-2xl text-[#581d2b]">{book.title}</h2>
-              <p className="mt-2 text-sm font-bold">{book.currency} {Number(book.price).toFixed(2)}</p>
+              <BookPriceTag book={book} className="mt-2 text-sm"/>
               <p className="mt-1 text-xs text-[#766b67]">{book.is_preorder ? `Pre-order${book.available_on ? ` · expected ${book.available_on}` : ''}` : 'Available now'}</p>
             </div><div className="flex items-center justify-between">
               <div className="flex items-center gap-3 rounded-full border border-[#e9dfd3] px-3 py-1.5">
