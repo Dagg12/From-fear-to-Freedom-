@@ -331,6 +331,20 @@ export function AdminDashboard() {
     }
   }
 
+  async function deleteCancelledOrder(order: Order) {
+    if (order.status !== 'cancelled') { setError('Only cancelled orders can be deleted.'); return; }
+    if (!window.confirm('Permanently delete cancelled order ' + order.order_number + '? This cannot be undone.')) return;
+    setError(''); setNotice('');
+    try {
+      const { data: { session }, error: authError } = await createClient().auth.getSession();
+      if (authError || !session?.access_token) throw authError ?? new Error('Administrator session expired. Sign in again.');
+      const response = await fetch('/api/admin/orders/' + encodeURIComponent(order.id), { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.access_token } });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Unable to delete this order.');
+      await loadData(); setNotice('Cancelled order ' + order.order_number + ' permanently deleted.');
+    } catch (cause) { setError(errorMessage(cause, 'Unable to delete cancelled order.')); }
+  }
+
   async function moderateReview(review: Review, status: Review['status']) {
     setError('');
     setNotice('');
@@ -575,9 +589,9 @@ export function AdminDashboard() {
           <div className="mt-6 space-y-3">{orders.length === 0 ? <p className="body-copy text-sm">No customer orders yet.</p> : orders.map((order) => <article key={order.id} className="rounded-xl bg-[#fbf7f0] p-4">
             <div className="flex flex-wrap justify-between gap-3"><strong>{order.order_number}</strong><strong>{order.currency} {Number(order.total).toFixed(2)}</strong></div>
             <p className="mt-2 text-xs text-[#766b67]">{order.customer_name} · {order.customer_email} · {new Date(order.created_at).toLocaleDateString()}</p>
-            <div className="mt-3 flex items-center gap-3"><span className="text-xs capitalize">Status: {order.status}</span><select aria-label={`Update ${order.order_number} status`} className="field max-w-48 !py-2" value={order.status} onChange={(event) => void updateOrder(order, event.target.value)}>
+            <div className="mt-3 flex flex-wrap items-center gap-3"><span className="text-xs capitalize">Status: {order.status}</span><select aria-label={`Update ${order.order_number} status`} className="field max-w-48 !py-2" value={order.status} onChange={(event) => void updateOrder(order, event.target.value)}>
               {['pending', 'paid', 'shipped', 'completed', 'cancelled', 'refunded'].map((status) => <option key={status} value={status}>{status}</option>)}
-            </select></div>
+            </select>{order.status === 'cancelled' && <button type="button" onClick={() => void deleteCancelledOrder(order)} className="btn btn-outline !py-2 text-red-800">Delete cancelled order</button>}</div>
           </article>)}</div>
         </> : tab === 'reviews' ? <>
           <h2 className="font-display text-3xl text-[#581d2b]">Reader reviews</h2>
