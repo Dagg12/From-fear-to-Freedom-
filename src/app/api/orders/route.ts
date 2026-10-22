@@ -8,6 +8,7 @@ type CheckoutRequest = {
   customer?: { name?: string; phone?: string; address?: string };
   fulfillmentMethod?: 'delivery' | 'pickup';
   promoCode?: string;
+  affiliateCode?: string;
 };
 type CreatedOrder = { id: string; order_number: string; total: number | string };
 
@@ -21,7 +22,8 @@ function isCheckoutRequest(value: unknown): value is CheckoutRequest {
     typeof value.customer.address === 'string' &&
     (value.customer.phone === undefined || typeof value.customer.phone === 'string') &&
     (value.fulfillmentMethod === undefined || value.fulfillmentMethod === 'delivery' || value.fulfillmentMethod === 'pickup') &&
-    (value.promoCode === undefined || typeof value.promoCode === 'string');
+    (value.promoCode === undefined || typeof value.promoCode === 'string') &&
+    (value.affiliateCode === undefined || typeof value.affiliateCode === 'string');
 }
 
 function isCartLine(value: unknown): value is CartLine {
@@ -109,7 +111,7 @@ export async function POST(request: Request) {
     (fulfillmentMethod === 'delivery' && !input.customer.address?.trim()) ||
     input.customer.name.trim().length > 150 || (input.customer.address?.trim().length ?? 0) > 1000 ||
     (input.customer.phone?.trim().length ?? 0) > 40 ||
-    (input.promoCode?.trim().length ?? 0) > 40 ||
+    (input.promoCode?.trim().length ?? 0) > 40 || (input.affiliateCode?.trim().length ?? 0) > 40 ||
     !Array.isArray(input.items) || input.items.length === 0 || input.items.length > 20) {
     return NextResponse.json({ error: 'Sign in and provide your name, delivery address, and at least one book.' }, { status: 400 });
   }
@@ -141,6 +143,7 @@ export async function POST(request: Request) {
     p_shipping_total: fulfillmentMethod === 'pickup' ? 0 : shippingAmount,
     p_items: [...quantities].map(([id, quantity]) => ({ id, quantity })),
     p_promo_code: input.promoCode?.trim() || null,
+    p_affiliate_code: input.affiliateCode?.trim() || null,
   }).maybeSingle();
   if (orderError || !isCreatedOrder(orderData)) {
     console.error('Unable to create checkout order:', orderError?.message);
