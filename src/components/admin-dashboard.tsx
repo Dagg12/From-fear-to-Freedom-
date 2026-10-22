@@ -17,6 +17,8 @@ type Order = {
   shipping_address?: { fulfillment_method?: string; address?: string | null; pickup_location?: string } | null;
 };
 
+type Affiliate = { id:string; user_id:string; status:'pending'|'approved'|'rejected'|'suspended'; referral_code:string|null; requested_at:string; admin_note:string|null; profile?:{full_name:string|null;email:string|null} };
+type AffiliateReferral = { id:string; affiliate_id:string; order_id:string; referral_code:string; order_total:number; commission_amount:number; commission_status:string; paid_at:string|null; payment_reference:string|null; order?:{order_number:string;customer_name:string;customer_email:string;status:string} };
 type Review = {
   id: string;
   display_name: string;
@@ -124,12 +126,14 @@ const initialPromoFormValue = initialPromoForm;
 export function AdminDashboard() {
   const [checking, setChecking] = useState(true);
   const [authorized, setAuthorized] = useState(false);
-  const [tab, setTab] = useState<'books' | 'promos' | 'orders' | 'reviews' | 'events'>('books');
+  const [tab, setTab] = useState<'books' | 'promos' | 'orders' | 'reviews' | 'events' | 'affiliates'>('books');
   const [books, setBooks] = useState<Book[]>([]);
   const [promos, setPromos] = useState<PromoCode[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [events, setEvents] = useState<StoreEvent[]>([]);
+  const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
+  const [affiliateReferrals, setAffiliateReferrals] = useState<AffiliateReferral[]>([]);
   const [form, setForm] = useState(initialForm);
   const [editingBookId, setEditingBookId] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -142,23 +146,37 @@ export function AdminDashboard() {
 
   const loadData = useCallback(async () => {
     const supabase = createClient();
-    const [bookResult, promoResult, orderResult, reviewResult, eventResult] = await Promise.all([
+    const [bookResult, promoResult, orderResult, reviewResult, eventResult, affiliateResult, referralResult] = await Promise.all([
       supabase.from('books').select('*').order('created_at', { ascending: false }),
       supabase.from('promo_codes').select('id,code,description,discount_kind,discount_value,minimum_order_value,starts_at,expires_at,usage_limit,usage_count,per_customer_limit,is_active').order('created_at', { ascending: false }),
       supabase.from('orders').select('id,order_number,customer_name,customer_email,status,total,currency,created_at,shipping_address').order('created_at', { ascending: false }),
       supabase.from('reviews').select('id,display_name,rating,title,body,status,created_at').order('created_at', { ascending: false }),
       supabase.from('events').select('id,slug,title,summary,starts_at,location_name,status').order('starts_at', { ascending: false }),
+      supabase.from('affiliate_profiles').select('id,user_id,status,referral_code,requested_at,admin_note').order('requested_at',{ascending:false}),
+      supabase.from('affiliate_referrals').select('id,affiliate_id,order_id,referral_code,order_total,commission_amount,commission_status,paid_at,payment_reference').order('created_at',{ascending:false}),
     ]);
     if (bookResult.error) throw bookResult.error;
     if (promoResult.error) throw promoResult.error;
     if (orderResult.error) throw orderResult.error;
     if (reviewResult.error) throw reviewResult.error;
     if (eventResult.error) throw eventResult.error;
+    if (affiliateResult.error) throw affiliateResult.error;
+    if (referralResult.error) throw referralResult.error;
     setBooks((bookResult.data ?? []) as Book[]);
     setPromos((promoResult.data ?? []) as PromoCode[]);
     setOrders((orderResult.data ?? []) as Order[]);
     setReviews((reviewResult.data ?? []) as Review[]);
     setEvents((eventResult.data ?? []) as StoreEvent[]);
+    const affiliateRows = (affiliateResult.data ?? []) as Affiliate[];
+    const userIds = affiliateRows.map((a) => a.user_id);
+    const {data: profileRows, error: profileError} = userIds.length ? await supabase.from('profiles').select('id,full_name,email').in('id',userIds) : {data:[],error:null};
+    if (profileError) throw profileError;
+    setAffiliates(affiliateRows.map((a) => ({...a, profile: (profileRows ?? []).find((p) => p.id === a.user_id)})));
+    const referralRows = (referralResult.data ?? []) as AffiliateReferral[];
+    const orderIds = referralRows.map((r) => r.order_id);
+    const {data: referralOrders, error: referralOrderError} = orderIds.length ? await supabase.from('orders').select('id,order_number,customer_name,customer_email,status').in('id',orderIds) : {data:[],error:null};
+    if (referralOrderError) throw referralOrderError;
+    setAffiliateReferrals(referralRows.map((r) => ({...r, order: (referralOrders ?? []).find((o) => o.id === r.order_id)})));
   }, []);
 
   useEffect(() => {
@@ -317,6 +335,28 @@ export function AdminDashboard() {
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to update book visibility.'));
     }
+  }
+
+
+  async function reviewAffiliate(affiliate: Affiliate, status: Affiliate['status']) {
+    setError(''); setNotice('');
+    try {
+      const {data:{user}} = await createClient().auth.getUser();
+      if (!user) throw new Error('Please sign in again.');
+      const referralCode = status === 'approved' ? (affiliate.referral_code || `REF-${crypto.randomUUID().replace(/-/g,'').slice(0,8).toUpperCase()}`) : affiliate.referral_code;
+      const {error:updateError} = await createClient().from('affiliate_profiles').update({status, referral_code: referralCode, reviewed_at:new Date().toISOString(), reviewed_by:user.id}).eq('id',affiliate.id);
+      if(updateError) throw updateError; await loadData(); setNotice(`Affiliate request ${status}.`);
+    } catch(cause) { setError(errorMessage(cause,'Unable to update affiliate request.')); }
+  }
+
+  async function markCommissionPaid(referral: AffiliateReferral) {
+    const reference = window.prompt('Enter payment reference (EFT reference or note):');
+    if (reference === null) return;
+    setError(''); setNotice('');
+    try {
+      const {error:updateError} = await createClient().from('affiliate_referrals').update({commission_status:'paid',paid_at:new Date().toISOString(),payment_reference:reference.trim() || null}).eq('id',referral.id);
+      if(updateError) throw updateError; await loadData(); setNotice('Affiliate commission marked as paid.');
+    } catch(cause) { setError(errorMessage(cause,'Unable to record payment.')); }
   }
 
   async function updateOrder(order: Order, status: string) {
@@ -496,11 +536,18 @@ export function AdminDashboard() {
   return <div className="container section-space">
     <p className="eyebrow">Store management</p><h1 className="heading mt-3">Admin dashboard.</h1>
     <div className="mt-8 grid gap-6 lg:grid-cols-[220px_1fr]">
-      <aside className="surface h-fit p-3">{(['books', 'promos', 'orders', 'reviews', 'events'] as const).map((name) => <button key={name} type="button" onClick={() => setTab(name)} className={`mb-1 block w-full rounded-lg px-4 py-3 text-left text-xs font-bold capitalize ${tab === name ? 'bg-[#581d2b] text-white' : 'text-[#665853] hover:bg-[#f5eee5]'}`}>{name === 'promos' ? 'Promo codes' : name} ({name === 'books' ? books.length : name === 'promos' ? promos.length : name === 'orders' ? orders.length : name === 'reviews' ? reviews.length : events.length})</button>)}
+      <aside className="surface h-fit p-3">{(['books', 'promos', 'orders', 'reviews', 'events', 'affiliates'] as const).map((name) => <button key={name} type="button" onClick={() => setTab(name)} className={`mb-1 block w-full rounded-lg px-4 py-3 text-left text-xs font-bold capitalize ${tab === name ? 'bg-[#581d2b] text-white' : 'text-[#665853] hover:bg-[#f5eee5]'}`}>{name === 'promos' ? 'Promo codes' : name === 'affiliates' ? 'Affiliates & payouts' : name} ({name === 'books' ? books.length : name === 'promos' ? promos.length : name === 'orders' ? orders.length : name === 'reviews' ? reviews.length : name === 'events' ? events.length : affiliates.length})</button>)}
         <p className="mt-3 border-t border-[#e9dfd3] px-3 pt-3 text-[10px] leading-5 text-[#8a7c76]">Changes are saved to the configured Supabase database.</p>
       </aside>
       <section className="surface min-h-[380px] p-5 sm:p-8">
-        {tab === 'books' ? <>
+        {tab === 'affiliates' ? <>
+          <h2 className="font-display text-3xl text-[#581d2b]">Affiliate programme</h2>
+          <p className="mt-2 text-sm text-[#766b67]">Fixed commission: R50 per book copy, earned only after payment is confirmed. Cancelled/refunded unpaid commissions are voided.</p>
+          <div className="mt-6 space-y-3">{affiliates.length===0 ? <p className="body-copy text-sm">No affiliate requests yet.</p> : affiliates.map((a)=><article key={a.id} className="rounded-xl bg-[#fbf7f0] p-4"><div className="flex flex-wrap justify-between gap-3"><strong>{a.profile?.full_name || a.profile?.email || a.user_id}</strong><span className="text-xs capitalize">{a.status}</span></div><p className="mt-1 text-xs text-[#766b67]">{a.profile?.email || ''} · Requested {new Date(a.requested_at).toLocaleDateString()} {a.referral_code ? `· Code: ${a.referral_code}` : ''}</p><div className="mt-3 flex flex-wrap gap-2">{a.status!=='approved' && <button type="button" onClick={()=>void reviewAffiliate(a,'approved')} className="btn btn-primary !py-2">Approve &amp; generate code</button>}{a.status!=='rejected' && <button type="button" onClick={()=>void reviewAffiliate(a,'rejected')} className="btn btn-outline !py-2">Reject</button>}{a.status==='approved' && <button type="button" onClick={()=>void reviewAffiliate(a,'suspended')} className="btn btn-outline !py-2">Suspend</button>}{a.status==='suspended' && <button type="button" onClick={()=>void reviewAffiliate(a,'approved')} className="btn btn-outline !py-2">Reactivate</button>}</div></article>)}</div>
+          <h3 className="mt-10 font-display text-2xl text-[#581d2b]">Sales and commission payments</h3>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-[#fbf7f0] p-4"><p className="text-xs text-[#766b67]">Outstanding / payable</p><strong className="text-xl">R{affiliateReferrals.filter(r=>r.commission_status==='payable').reduce((n,r)=>n+Number(r.commission_amount),0).toFixed(2)}</strong></div><div className="rounded-xl bg-[#fbf7f0] p-4"><p className="text-xs text-[#766b67]">Paid</p><strong className="text-xl">R{affiliateReferrals.filter(r=>r.commission_status==='paid').reduce((n,r)=>n+Number(r.commission_amount),0).toFixed(2)}</strong></div><div className="rounded-xl bg-[#fbf7f0] p-4"><p className="text-xs text-[#766b67]">Voided</p><strong className="text-xl">R{affiliateReferrals.filter(r=>r.commission_status==='void').reduce((n,r)=>n+Number(r.commission_amount),0).toFixed(2)}</strong></div></div>
+          <div className="mt-4 space-y-3">{affiliateReferrals.map((r)=><article key={r.id} className="rounded-xl bg-[#fbf7f0] p-4"><div className="flex flex-wrap justify-between gap-3"><strong>{r.order?.order_number || r.order_id}</strong><strong>R{Number(r.commission_amount).toFixed(2)}</strong></div><p className="mt-1 text-xs text-[#766b67]">{affiliates.find(a=>a.id===r.affiliate_id)?.profile?.full_name || r.referral_code} · {r.order?.customer_name || 'Customer'} · order total R{Number(r.order_total).toFixed(2)} · {r.commission_status}</p>{r.payment_reference && <p className="mt-1 text-xs">Payment reference: {r.payment_reference}</p>}{r.commission_status==='payable' && <button type="button" onClick={()=>void markCommissionPaid(r)} className="btn btn-primary mt-3 !py-2">Mark commission paid</button>}</article>)}</div>
+        </> : tab === 'books' ? <>
           <h2 className="font-display text-3xl text-[#581d2b]">Books and pre-orders</h2>
           <form onSubmit={saveBook} className="mt-6 grid gap-4 md:grid-cols-2">
             <label className="text-xs font-bold">Book title<input required className="field mt-2" value={form.title} onChange={(event) => {
