@@ -9,9 +9,14 @@ function encode(value: string) {
 }
 
 function signature(fields: Record<string, string>, passphrase: string) {
-  const payload = Object.keys(fields).filter((key) => key !== 'signature' && fields[key] !== '')
-    .sort().map((key) => `${key}=${encode(fields[key])}`).join('&');
-  return createHash('md5').update(passphrase ? `${payload}&passphrase=${encode(passphrase)}` : payload).digest('hex');
+  // ITN signature fields must remain in the order received from PayFast.
+  const payload = Object.keys(fields)
+    .filter((key) => key !== 'signature' && fields[key] !== '')
+    .map((key) => key + '=' + encode(fields[key]))
+    .join('&');
+  const cleanPassphrase = passphrase.trim();
+  const signedPayload = cleanPassphrase ? payload + '&passphrase=' + encode(cleanPassphrase) : payload;
+  return createHash('md5').update(signedPayload).digest('hex');
 }
 
 function safeEqual(left: string, right: string) {
