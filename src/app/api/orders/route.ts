@@ -19,7 +19,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isCheckoutRequest(value: unknown): value is CheckoutRequest {
   if (!isRecord(value) || !isRecord(value.customer) || !Array.isArray(value.items)) return false;
   return typeof value.customer.name === 'string' &&
-    typeof value.customer.address === 'string' &&
+    (value.customer.address === undefined || typeof value.customer.address === 'string') &&
     (value.customer.phone === undefined || typeof value.customer.phone === 'string') &&
     (value.fulfillmentMethod === undefined || value.fulfillmentMethod === 'delivery' || value.fulfillmentMethod === 'pickup') &&
     (value.promoCode === undefined || typeof value.promoCode === 'string') &&
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     p_customer_phone: input.customer.phone?.trim().slice(0, 40) ?? null,
     p_shipping_address: fulfillmentMethod === 'pickup'
       ? { fulfillment_method: 'pickup', address: null, pickup_location: process.env.BOOK_PICKUP_LOCATION?.trim() || 'Pickup details will be confirmed by email.' }
-      : { fulfillment_method: 'delivery', address: input.customer.address.trim().slice(0, 1000) },
+      : { fulfillment_method: 'delivery', address: (input.customer.address ?? '').trim().slice(0, 1000) },
     p_shipping_total: fulfillmentMethod === 'pickup' ? 0 : shippingAmount,
     p_items: [...quantities].map(([id, quantity]) => ({ id, quantity })),
     p_promo_code: input.promoCode?.trim() || null,
@@ -168,7 +168,7 @@ export async function POST(request: Request) {
     const orderSummary = orderItems.map((item) => item.title_snapshot).join(', ');
     const fulfillmentLabel = fulfillmentMethod === 'pickup'
       ? `Pickup — ${process.env.BOOK_PICKUP_LOCATION?.trim() || 'details to be confirmed'}`
-      : `Delivery to: ${input.customer.address.trim()}`;
+      : `Delivery to: ${(input.customer.address ?? '').trim()}`;
     try {
       const emailResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
