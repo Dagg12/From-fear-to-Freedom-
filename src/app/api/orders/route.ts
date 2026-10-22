@@ -40,9 +40,25 @@ function encode(value: string) {
 }
 
 function sign(fields: Record<string, string>, passphrase: string) {
-  const payload = Object.keys(fields).filter((key) => fields[key] !== '' && key !== 'signature')
-    .sort().map((key) => `${key}=${encode(fields[key])}`).join('&');
-  return createHash('md5').update(passphrase ? `${payload}&passphrase=${encode(passphrase)}` : payload).digest('hex');
+  // PayFast custom payment-form signatures use the documented field order,
+  // not alphabetical order (alphabetical sorting is for PayFast's separate API).
+  const fieldOrder = [
+    'merchant_id', 'merchant_key', 'return_url', 'cancel_url', 'notify_url',
+    'notify_method', 'name_first', 'name_last', 'email_address', 'cell_number',
+    'm_payment_id', 'amount', 'item_name', 'item_description',
+    'custom_int1', 'custom_int2', 'custom_int3', 'custom_int4', 'custom_int5',
+    'custom_str1', 'custom_str2', 'custom_str3', 'custom_str4', 'custom_str5',
+    'email_confirmation', 'confirmation_address', 'currency', 'payment_method',
+    'subscription_type', 'billing_date', 'recurring_amount', 'frequency', 'cycles',
+    'subscription_notify_email', 'subscription_notify_webhook', 'subscription_notify_buyer',
+  ];
+  const payload = fieldOrder
+    .filter((key) => fields[key] !== undefined && fields[key] !== '')
+    .map((key) => `${key}=${encode(fields[key])}`)
+    .join('&');
+  return createHash('md5')
+    .update(passphrase ? `${payload}&passphrase=${encode(passphrase)}` : payload)
+    .digest('hex');
 }
 
 export async function POST(request: Request) {
