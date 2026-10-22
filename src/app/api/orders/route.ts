@@ -6,6 +6,7 @@ type CartLine = { id: string; quantity: number };
 type CheckoutRequest = {
   items?: unknown[];
   customer?: { name?: string; phone?: string; address?: string };
+  fulfillmentMethod?: 'delivery' | 'pickup';
   promoCode?: string;
 };
 type CreatedOrder = { id: string; order_number: string; total: number | string };
@@ -19,6 +20,7 @@ function isCheckoutRequest(value: unknown): value is CheckoutRequest {
   return typeof value.customer.name === 'string' &&
     typeof value.customer.address === 'string' &&
     (value.customer.phone === undefined || typeof value.customer.phone === 'string') &&
+    (value.fulfillmentMethod === undefined || value.fulfillmentMethod === 'delivery' || value.fulfillmentMethod === 'pickup') &&
     (value.promoCode === undefined || typeof value.promoCode === 'string');
 }
 
@@ -101,9 +103,11 @@ export async function POST(request: Request) {
   }
   if (!isCheckoutRequest(parsed)) return NextResponse.json({ error: 'Invalid order request.' }, { status: 400 });
   const input = parsed;
+  const fulfillmentMethod = input.fulfillmentMethod === 'pickup' ? 'pickup' : 'delivery';
   const token = getBearerToken(request);
-  if (!token || !input.customer?.name?.trim() || !input.customer.address?.trim() ||
-    input.customer.name.trim().length > 150 || input.customer.address.trim().length > 1000 ||
+  if (!token || !input.customer?.name?.trim() ||
+    (fulfillmentMethod === 'delivery' && !input.customer.address?.trim()) ||
+    input.customer.name.trim().length > 150 || (input.customer.address?.trim().length ?? 0) > 1000 ||
     (input.customer.phone?.trim().length ?? 0) > 40 ||
     (input.promoCode?.trim().length ?? 0) > 40 ||
     !Array.isArray(input.items) || input.items.length === 0 || input.items.length > 20) {
@@ -131,8 +135,10 @@ export async function POST(request: Request) {
     p_customer_name: input.customer.name.trim().slice(0, 150),
     p_customer_email: user.email,
     p_customer_phone: input.customer.phone?.trim().slice(0, 40) ?? null,
-    p_shipping_address: { address: input.customer.address.trim().slice(0, 1000) },
-    p_shipping_total: shippingAmount,
+    p_shipping_address: fulfillmentMethod === 'pickup'
+      ? { fulfillment_method: 'pickup', address: null, pickup_location: process.env.BOOK_PICKUP_LOCATION?.trim() || 'Pickup details will be confirmed by email.' }
+      : { fulfillment_method: 'delivery', address: input.customer.address.trim().slice(0, 1000) },
+    p_shipping_total: fulfillmentMethod === 'pickup' ? 0 : shippingAmount,
     p_items: [...quantities].map(([id, quantity]) => ({ id, quantity })),
     p_promo_code: input.promoCode?.trim() || null,
   }).maybeSingle();
@@ -151,6 +157,36 @@ export async function POST(request: Request) {
     console.error('Unable to read checkout order items:', itemsError?.message);
     return NextResponse.json({ error: 'Unable to finish checkout. Please try again.' }, { status: 500 });
   }
+  // Email failures must not block checkout after the order is safely recorded.
+  const adminEmail = process.env.ADMIN_ORDER_NOTIFICATION_EMAIL?.trim();
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  const fromEmail = process.env.RESEND_FROM_EMAIL?.trim();
+  if (adminEmail && resendApiKey && fromEmail) {
+    const orderSummary = orderItems.map((item) => item.title_snapshot).join(', ');
+    const fulfillmentLabel = fulfillmentMethod === 'pickup'
+      ? `Pickup — ${process.env.BOOK_PICKUP_LOCATION?.trim() || 'details to be confirmed'}`
+      : `Delivery to: ${input.customer.address.trim()}`;
+    try {
+      const emailResponse = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: fromEmail, to: [adminEmail], subject: `New book order ${order.order_number}`,
+          text: [
+            'A new order has been placed on the Refilwe Mogale website.',
+            `Order: ${order.order_number}`, `Customer: ${input.customer.name.trim()}`,
+            `Email: ${user.email}`, `Phone: ${input.customer.phone?.trim() || 'Not provided'}`,
+            `Fulfilment: ${fulfillmentLabel}`, `Books: ${orderSummary}`,
+            `Total: ZAR ${Number(order.total).toFixed(2)}`,
+            'Payment status: pending PayFast confirmation', `Admin dashboard: ${base}/admin`,
+          ].join('\n'),
+        }),
+        cache: 'no-store', signal: AbortSignal.timeout(8000),
+      });
+      if (!emailResponse.ok) console.error('Order notification email was rejected by the email provider:', emailResponse.status);
+    } catch (emailError) { console.error('Could not send new-order notification email:', emailError); }
+  } else { console.warn('Order notification email is not configured; set ADMIN_ORDER_NOTIFICATION_EMAIL, RESEND_API_KEY, and RESEND_FROM_EMAIL.'); }
+
   const fields: Record<string, string> = {
     merchant_id: merchantId,
     merchant_key: merchantKey,
