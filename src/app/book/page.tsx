@@ -9,7 +9,7 @@ export default function Book() {
     <section className="container grid items-center gap-12 py-12 sm:py-20 lg:grid-cols-[.92fr_1.08fr]">
       <div className="relative mx-auto max-w-[620px]">
         <div className="absolute -inset-5 rounded-[48%] bg-[#efe4d5]"/>
-        <Image src="/images/book-cover.webp" alt="Original full cover artwork for From Fear to Freedom by Refilwe Mokgosi-Mogale" width={1900} height={1333} priority className="relative w-full rounded-sm shadow-2xl"/>
+        <Image src="/images/BookCover.jpeg" alt="Original full cover artwork for From Fear to Freedom by Refilwe Mokgosi-Mogale" width={1900} height={1333} priority className="relative w-full rounded-sm shadow-2xl"/>
         <p className="relative mt-4 text-center text-[10px] uppercase tracking-[.18em] text-[#86776c]">Original cover artwork supplied by the author</p>
       </div>
       <div>
