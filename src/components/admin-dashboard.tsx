@@ -14,6 +14,7 @@ type Order = {
   total: number;
   currency: string;
   created_at: string;
+  shipping_address?: { fulfillment_method?: string; address?: string | null; pickup_location?: string } | null;
 };
 
 type Review = {
@@ -144,7 +145,7 @@ export function AdminDashboard() {
     const [bookResult, promoResult, orderResult, reviewResult, eventResult] = await Promise.all([
       supabase.from('books').select('*').order('created_at', { ascending: false }),
       supabase.from('promo_codes').select('id,code,description,discount_kind,discount_value,minimum_order_value,starts_at,expires_at,usage_limit,usage_count,per_customer_limit,is_active').order('created_at', { ascending: false }),
-      supabase.from('orders').select('id,order_number,customer_name,customer_email,status,total,currency,created_at').order('created_at', { ascending: false }),
+      supabase.from('orders').select('id,order_number,customer_name,customer_email,status,total,currency,created_at,shipping_address').order('created_at', { ascending: false }),
       supabase.from('reviews').select('id,display_name,rating,title,body,status,created_at').order('created_at', { ascending: false }),
       supabase.from('events').select('id,slug,title,summary,starts_at,location_name,status').order('starts_at', { ascending: false }),
     ]);
@@ -588,7 +589,7 @@ export function AdminDashboard() {
           <h2 className="font-display text-3xl text-[#581d2b]">Orders and fulfilment</h2>
           <div className="mt-6 space-y-3">{orders.length === 0 ? <p className="body-copy text-sm">No customer orders yet.</p> : orders.map((order) => <article key={order.id} className="rounded-xl bg-[#fbf7f0] p-4">
             <div className="flex flex-wrap justify-between gap-3"><strong>{order.order_number}</strong><strong>{order.currency} {Number(order.total).toFixed(2)}</strong></div>
-            <p className="mt-2 text-xs text-[#766b67]">{order.customer_name} · {order.customer_email} · {new Date(order.created_at).toLocaleDateString()}</p>
+            <p className="mt-2 text-xs text-[#766b67]">{order.customer_name} · {order.customer_email} · {new Date(order.created_at).toLocaleDateString()}</p><p className="mt-1 text-xs text-[#766b67]">{order.shipping_address?.fulfillment_method === 'pickup' ? 'Local pickup · ' + (order.shipping_address.pickup_location || 'Confirm pickup details') : 'Delivery' + (order.shipping_address?.address ? ' · ' + order.shipping_address.address : '')}</p>
             <div className="mt-3 flex flex-wrap items-center gap-3"><span className="text-xs capitalize">Status: {order.status}</span><select aria-label={`Update ${order.order_number} status`} className="field max-w-48 !py-2" value={order.status} onChange={(event) => void updateOrder(order, event.target.value)}>
               {['pending', 'paid', 'shipped', 'completed', 'cancelled', 'refunded'].map((status) => <option key={status} value={status}>{status}</option>)}
             </select>{order.status === 'cancelled' && <button type="button" onClick={() => void deleteCancelledOrder(order)} className="btn btn-outline !py-2 text-red-800">Delete cancelled order</button>}</div>
