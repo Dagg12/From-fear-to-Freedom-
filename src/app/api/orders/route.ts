@@ -5,7 +5,7 @@ import { createServiceClient, getBearerToken } from '@/lib/server-supabase';
 type CartLine = { id: string; quantity: number };
 type CheckoutRequest = {
   items?: unknown[];
-  customer?: { name?: string; phone?: string; address?: string };
+  customer?: { name?: string; phone?: string; address?: string; addressLine1?: string; addressLine2?: string; city?: string; province?: string; postalCode?: string; country?: string };
   fulfillmentMethod?: 'delivery' | 'pickup';
   promoCode?: string;
   affiliateCode?: string;
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     p_customer_phone: input.customer.phone?.trim().slice(0, 40) ?? null,
     p_shipping_address: fulfillmentMethod === 'pickup'
       ? { fulfillment_method: 'pickup', address: null, pickup_location: process.env.BOOK_PICKUP_LOCATION?.trim() || 'Pickup details will be confirmed by email.' }
-      : { fulfillment_method: 'delivery', address: (input.customer.address ?? '').trim().slice(0, 1000) },
+      : { fulfillment_method: 'delivery', address: (input.customer.address ?? '').trim().slice(0, 1000), address_line_1: input.customer.addressLine1?.trim().slice(0, 180) ?? null, address_line_2: input.customer.addressLine2?.trim().slice(0, 180) ?? null, city: input.customer.city?.trim().slice(0, 100) ?? null, province: input.customer.province?.trim().slice(0, 100) ?? null, postal_code: input.customer.postalCode?.trim().slice(0, 20) ?? null, country: input.customer.country?.trim().slice(0, 100) ?? null },
     p_shipping_total: fulfillmentMethod === 'pickup' ? 0 : shippingAmount,
     p_items: [...quantities].map(([id, quantity]) => ({ id, quantity })),
     p_promo_code: input.promoCode?.trim() || null,
