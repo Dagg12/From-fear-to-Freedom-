@@ -21,6 +21,12 @@ function isCheckoutRequest(value: unknown): value is CheckoutRequest {
   return typeof value.customer.name === 'string' &&
     (value.customer.address === undefined || typeof value.customer.address === 'string') &&
     (value.customer.phone === undefined || typeof value.customer.phone === 'string') &&
+    (value.customer.addressLine1 === undefined || typeof value.customer.addressLine1 === 'string') &&
+    (value.customer.addressLine2 === undefined || typeof value.customer.addressLine2 === 'string') &&
+    (value.customer.city === undefined || typeof value.customer.city === 'string') &&
+    (value.customer.province === undefined || typeof value.customer.province === 'string') &&
+    (value.customer.postalCode === undefined || typeof value.customer.postalCode === 'string') &&
+    (value.customer.country === undefined || typeof value.customer.country === 'string') &&
     (value.fulfillmentMethod === undefined || value.fulfillmentMethod === 'delivery' || value.fulfillmentMethod === 'pickup') &&
     (value.promoCode === undefined || typeof value.promoCode === 'string') &&
     (value.affiliateCode === undefined || typeof value.affiliateCode === 'string');
