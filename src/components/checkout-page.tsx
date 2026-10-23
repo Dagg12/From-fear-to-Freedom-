@@ -8,12 +8,14 @@ import { createClient } from '@/lib';
 type CartLine = { id: string; qty: number };
 
 export function CheckoutPage() {
-  const [form, setForm] = useState({ name: '', phone: '', address: '' });
+  const [form, setForm] = useState({ name: '', phone: '', addressLine1: '', addressLine2: '', city: '', province: '', postalCode: '', country: 'South Africa' });
   const [fulfillmentMethod, setFulfillmentMethod] = useState<'delivery' | 'pickup'>('delivery');
   const [promoCode, setPromoCode] = useState('');
   const [affiliateCode, setAffiliateCode] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,6 +43,7 @@ export function CheckoutPage() {
         setBusy(false);
         return;
       }
+      const address = [form.addressLine1, form.addressLine2, form.city, form.province, form.postalCode, form.country].map((part) => part.trim()).filter(Boolean).join(', ');
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: {
@@ -49,7 +52,7 @@ export function CheckoutPage() {
         },
         body: JSON.stringify({
           items: cart.map(({ id, qty }) => ({ id, quantity: qty })),
-          customer: form,
+          customer: { ...form, address },
           fulfillmentMethod,
           promoCode: promoCode.trim() || undefined,
           affiliateCode: affiliateCode.trim() || undefined,
@@ -80,7 +83,7 @@ export function CheckoutPage() {
     <form onSubmit={submit} className="surface mt-8 grid gap-5 p-6 sm:grid-cols-2 sm:p-8">
       <label className="text-xs font-bold">Full name<input required maxLength={150} autoComplete="name" className="field mt-2" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}/></label>
       <label className="text-xs font-bold">Phone number<input type="tel" maxLength={40} autoComplete="tel" className="field mt-2" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })}/></label>
-      <fieldset className="sm:col-span-2"><legend className="text-xs font-bold">How would you like to receive your book?</legend><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${fulfillmentMethod === 'delivery' ? 'border-[#581d2b] bg-[#fbf7f0]' : 'border-[#e9dfd3]'}`}><input type="radio" name="fulfillmentMethod" value="delivery" checked={fulfillmentMethod === 'delivery'} onChange={() => setFulfillmentMethod('delivery')} className="mt-1"/><span><strong className="block text-sm">Delivery</strong><span className="mt-1 block text-xs font-normal text-[#766b67]">Flat shipping fee: R50.00</span></span></label><label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${fulfillmentMethod === 'pickup' ? 'border-[#581d2b] bg-[#fbf7f0]' : 'border-[#e9dfd3]'}`}><input type="radio" name="fulfillmentMethod" value="pickup" checked={fulfillmentMethod === 'pickup'} onChange={() => setFulfillmentMethod('pickup')} className="mt-1"/><span><strong className="block text-sm">Local pickup</strong><span className="mt-1 block text-xs font-normal text-[#766b67]">No shipping fee. Pickup details will be confirmed after your order.</span></span></label></div></fieldset>{fulfillmentMethod === 'delivery' && <label className="text-xs font-bold sm:col-span-2">Delivery address<input required maxLength={1000} autoComplete="street-address" className="field mt-2" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })}/></label>}
+      <fieldset className="sm:col-span-2"><legend className="text-xs font-bold">How would you like to receive your book?</legend><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${fulfillmentMethod === 'delivery' ? 'border-[#581d2b] bg-[#fbf7f0]' : 'border-[#e9dfd3]'}`}><input type="radio" name="fulfillmentMethod" value="delivery" checked={fulfillmentMethod === 'delivery'} onChange={() => setFulfillmentMethod('delivery')} className="mt-1"/><span><strong className="block text-sm">Delivery</strong><span className="mt-1 block text-xs font-normal text-[#766b67]">Flat shipping fee: R50.00</span></span></label><label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${fulfillmentMethod === 'pickup' ? 'border-[#581d2b] bg-[#fbf7f0]' : 'border-[#e9dfd3]'}`}><input type="radio" name="fulfillmentMethod" value="pickup" checked={fulfillmentMethod === 'pickup'} onChange={() => setFulfillmentMethod('pickup')} className="mt-1"/><span><strong className="block text-sm">Local pickup</strong><span className="mt-1 block text-xs font-normal text-[#766b67]">No shipping fee. Pickup details will be confirmed after your order.</span></span></label></div></fieldset>{fulfillmentMethod === 'delivery' && <p className="eyebrow sm:col-span-2">Delivery address</p><label className="text-xs font-bold sm:col-span-2">Address line 1<input required maxLength={180} autoComplete="address-line1" placeholder="House / unit number and street name" className="field mt-2" value={form.addressLine1} onChange={(event) => update("addressLine1", event.target.value)}/></label><label className="text-xs font-bold sm:col-span-2">Address line 2 (optional)<input maxLength={180} autoComplete="address-line2" placeholder="Apartment, complex, building, suburb" className="field mt-2" value={form.addressLine2} onChange={(event) => update("addressLine2", event.target.value)}/></label><label className="text-xs font-bold">City / town<input required maxLength={100} autoComplete="address-level2" className="field mt-2" value={form.city} onChange={(event) => update("city", event.target.value)}/></label><label className="text-xs font-bold">Province / state<input required maxLength={100} autoComplete="address-level1" className="field mt-2" value={form.province} onChange={(event) => update("province", event.target.value)}/></label><label className="text-xs font-bold">Postal / ZIP code<input required maxLength={20} autoComplete="postal-code" className="field mt-2" value={form.postalCode} onChange={(event) => update("postalCode", event.target.value)}/></label><label className="text-xs font-bold">Country<select required autoComplete="country-name" className="field mt-2" value={form.country} onChange={(event) => update("country", event.target.value)}>{["South Africa","Botswana","Eswatini","Lesotho","Namibia","Zimbabwe","Mozambique","Zambia","Malawi","United Kingdom","United States","Canada","Australia","New Zealand","India","Nigeria","Kenya","Ghana","Germany","France","Netherlands","Ireland","United Arab Emirates","Other"].map((country) => <option key={country} value={country}>{country}</option>)}</select></label>}
       <label className="text-xs font-bold sm:col-span-2">Affiliate referral code (optional)<input maxLength={40} autoComplete="off" className="field mt-2 uppercase" placeholder="Seller referral code" value={affiliateCode} onChange={(event) => setAffiliateCode(event.target.value.toUpperCase())}/><span className="mt-1 block font-normal text-[#766b67]">If a seller referred you, enter their code so their sale is recorded.</span></label>
       <label className="text-xs font-bold sm:col-span-2">Promo code (optional)<input maxLength={40} autoComplete="off" className="field mt-2 uppercase" placeholder="Enter code" value={promoCode} onChange={(event) => setPromoCode(event.target.value.toUpperCase())}/></label>
       <p className="text-xs leading-5 text-[#766b67] sm:col-span-2">Book prices and promo codes are verified against the live catalogue on the server. The final discounted total is shown by PayFast before you pay. Local pickup has no shipping fee. Pre-orders remain pending payment confirmation and are marked for later fulfilment when the publisher enters a release date.</p>
